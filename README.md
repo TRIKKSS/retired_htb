@@ -170,15 +170,22 @@ C'est du pwn !
 
 ![gif triste](./images/sad.gif)
 
+## PWN
+
 je me met donc à exploiter ça en local, je réussi assez facilement à écraser l'addresse de retour de ma fonction activate_license mais ensuite ça deviens compliqué !
 
 cette partie fut très très longue, surtout pour moi qui fait très peu de pwn.
 
-<u>premier soucis</u> : lorsque notre binaire reçoit une connexion, il créé un fork (pas sur que ça se dise comme ça mais en gros il fait ça : https://www.geeksforgeeks.org/fork-system-call/) donc chiant à debug 
-<u>solution</u> : gdb nous permet de pouvoir soit follow les fork créé ou follow le process parent ``set follow-fork-mode child/parent``
+#### premier soucis
 
-<u>deuxième soucis</u> : grâce à notre lfi (en regardant le contenu de /proc/sys/kernel/randomize_va_space) on a pu verifier si l'aslr était activé et malheuresment elle l'était https://fr.wikipedia.org/wiki/Address_space_layout_randomization
-<u>solution</u> : encore notre lfi, on peut accéder à /proc/pid/maps qui va nous montrer comment est réparti la mémoire du process (pas convaincu que ça se dise comme ça encore une fois mais en bref on connais les addresses)
+lorsque notre binaire reçoit une connexion, il créé un fork (pas sur que ça se dise comme ça mais en gros il fait ça : https://www.geeksforgeeks.org/fork-system-call/) donc chiant à debug 
+#### solution
+ gdb nous permet de pouvoir soit follow les fork créé ou follow le process parent ``set follow-fork-mode child/parent``
+
+#### deuxième soucis
+grâce à notre lfi (en regardant le contenu de /proc/sys/kernel/randomize_va_space) on a pu verifier si l'aslr était activé et malheuresment elle l'était https://fr.wikipedia.org/wiki/Address_space_layout_randomization
+#### solution
+encore notre lfi, on peut accéder à /proc/pid/maps qui va nous montrer comment est réparti la mémoire du process (pas convaincu que ça se dise comme ça encore une fois mais en bref on connais les addresses)
 
 ```
 56140fd23000-56140fd24000 r--p 00000000 08:01 2408 /usr/bin/activate_license
@@ -209,14 +216,20 @@ cette partie fut très très longue, surtout pour moi qui fait très peu de pwn.
 7ffc1c5d5000-7ffc1c5d7000 r-xp 00000000 00:00 0 [vdso] 
 ```
 
-<u>troisième soucis</u> : NX et PIE d'activé comme sécuritée sur le binaire
-<u>solution</u> : ropchain ou ret2libc 
+#### troisième soucis
+NX et PIE d'activé comme sécuritée sur le binaire
+#### solution
+ropchain ou ret2libc 
 - https://www.ired.team/offensive-security/code-injection-process-injection/binary-exploitation/rop-chaining-return-oriented-programming
 - https://www.ired.team/offensive-security/code-injection-process-injection/binary-exploitation/return-to-libc-ret2libc
 (super blog)
 
-<u>quatrième soucis</u> : je trouve pas les gadgets nécessaire pour ropchain afin de mener à bien notre ret2libc
-<u>solution</u> : trouver nos gadgets dans la libc
+#### quatrième soucis
+je trouve pas les gadgets nécessaire pour ropchain afin de mener à bien notre ret2libc
+#### solution
+trouver nos gadgets dans la libc
+
+#### exploit
 
 donc voici ce que j'ai trouvé pour mener à bien cette exploitation :
 
