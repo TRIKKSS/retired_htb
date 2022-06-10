@@ -176,15 +176,15 @@ je me met donc à exploiter ça en local, je réussi assez facilement à écrase
 
 cette partie fut très très longue, surtout pour moi qui fait très peu de pwn.
 
-#### premier soucis
+### 1er soucis
 
 lorsque notre binaire reçoit une connexion, il créé un fork (pas sur que ça se dise comme ça mais en gros il fait ça : https://www.geeksforgeeks.org/fork-system-call/) donc chiant à debug 
-#### solution
+### solution
  gdb nous permet de pouvoir soit follow les fork créé ou follow le process parent ``set follow-fork-mode child/parent``
 
-#### deuxième soucis
+### 2ème soucis
 grâce à notre lfi (en regardant le contenu de /proc/sys/kernel/randomize_va_space) on a pu verifier si l'aslr était activé et malheuresment elle l'était https://fr.wikipedia.org/wiki/Address_space_layout_randomization
-#### solution
+### solution
 encore notre lfi, on peut accéder à /proc/pid/maps qui va nous montrer comment est réparti la mémoire du process (pas convaincu que ça se dise comme ça encore une fois mais en bref on connais les addresses)
 
 ```
@@ -216,20 +216,20 @@ encore notre lfi, on peut accéder à /proc/pid/maps qui va nous montrer comment
 7ffc1c5d5000-7ffc1c5d7000 r-xp 00000000 00:00 0 [vdso] 
 ```
 
-#### troisième soucis
+### 3ème soucis
 NX et PIE d'activé comme sécuritée sur le binaire
-#### solution
+### solution
 ropchain ou ret2libc 
 - https://www.ired.team/offensive-security/code-injection-process-injection/binary-exploitation/rop-chaining-return-oriented-programming
 - https://www.ired.team/offensive-security/code-injection-process-injection/binary-exploitation/return-to-libc-ret2libc
 (super blog)
 
-#### quatrième soucis
+### 4ème soucis
 je trouve pas les gadgets nécessaire pour ropchain afin de mener à bien notre ret2libc
-#### solution
+### solution
 trouver nos gadgets dans la libc
 
-#### exploit
+### exploit
 
 donc voici ce que j'ai trouvé pour mener à bien cette exploitation :
 
