@@ -7,15 +7,15 @@
 ## NMAP
 
 Dans un premier temps, on va utiliser nmap afin de connaitre les ports ouverts sur la machine.
-<center>
+
 ![nmap](./images/nmap.png)
-</center>
+
 on peut donc voir 2 ports ouverts, un serveur ssh sur le port 22 et un serveur web sur le port 80
 
 ## DIRSEARCH
-<center>
+
 ![dirsearch](./images/dirsearch.png)
-</center>
+
 on se rend donc sur le site web et on lance un dirsearch afin de voir si l'ont ne trouve pas des fichiers/dossiers intéressant.
 
 # INITIAL ACCESS
@@ -23,9 +23,9 @@ on se rend donc sur le site web et on lance un dirsearch afin de voir si l'ont n
 ## WEB
 
 En se rendant sur le site web on se rend compte directement qu'il y a un parametre get page qui a pour valeur default.html. Je pense donc directement à une lfi https://brightsec.com/blog/local-file-inclusion-lfi/
-<center>
+
 ![website](./images/website.png)
-</center>
+
 après quelques tests je trouve le code source de mon index.php en utilisant un filtre php.
 
 http://10.10.11.154/index.php?page=php://filter/convert.base64-encode/resource=index.php
@@ -132,13 +132,13 @@ Super intéressant ! On peut donc récuperer notre executable grâce à notre lf
 ## REVERSE
 
 Je commence donc à reverse le binaire, et j'me dis "ahaha imagine c'est du pwn"
-<center>
+
 ![IMAGE CLOWN](./images/clown.png)
-</center>
+
 Je continue donc de reverse, je trouve le nom d'une base de donnée sqlite dans laquelle sont stocké les clés d'activation.
-<center>
+
 ![image reverse](./images/sqlite_filename.png)
-</center>
+
 après avoir bruteforce un peu les répertoires je trouve la base de donnée je l'a download et je trouve absolument rien à l'intérieur.
 
 Donc dépité je reviens à mon binaire.
@@ -152,24 +152,24 @@ $license      = file_get_contents($_FILES['licensefile']['tmp_name']);
 socket_write($socket, pack("N", $license_size));
 socket_write($socket, $license);
 ```
-<center>
+
 ![getsize](./images/get_size.png)
-</center>
+
 et ensuite il va récuperer dans un buffer de 512 char notre license avant de l'envoyer dans la base de donnée.
 sauf que, il récupère $msglen char de notre license, on va donc pour dépasser de notre buffer et écrire dans la mémoire. 
 
 On a donc un buffer overflow !
-<center>
+
 ![image buffer overflow](./images/buffer_overflow.png)
-</center>
+
 J'ai trouvé quelque chose d'intéressant !
-<center>
+
 ![gif heureux](./images/happy.gif)
-</center>
+
 C'est du pwn !
-<center>
+
 ![gif triste](./images/sad.gif)
-</center>
+
 ## PWN
 
 je me met donc à exploiter ça en local, je réussi assez facilement à écraser l'addresse de retour de ma fonction activate_license mais ensuite ça deviens compliqué !
