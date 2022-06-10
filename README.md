@@ -160,7 +160,7 @@ sauf que, il récupère $msglen char de notre license, on va donc pour dépasser
 
 On a donc un buffer overflow !
 
-![image buffer overflow](./buffer_overflow.png)
+![image buffer overflow](./images/buffer_overflow.png)
 
 J'ai trouvé quelque chose d'intéressant !
 
