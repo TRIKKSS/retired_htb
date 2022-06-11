@@ -133,7 +133,7 @@ Super intéressant ! On peut donc récuperer notre executable grâce à notre lf
 
 Je commence donc à reverse le binaire, et j'me dis "ahaha imagine c'est du pwn"
 
-![IMAGE CLOWN](./images/clown.png)
+![IMAGE CLOWN](./images/clown.gif)
 
 Je continue donc de reverse, je trouve le nom d'une base de donnée sqlite dans laquelle sont stocké les clés d'activation.
 
